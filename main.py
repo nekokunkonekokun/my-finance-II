@@ -63,7 +63,7 @@ with c_a:
     if latest['Velocity'] >= INERTIA_THRESHOLD:
         st.error("!!! RED INERTIA (UP) !!!\n\nADVICE: MAC POWER! BUY!")
     elif latest['Velocity'] <= -INERTIA_THRESHOLD:
-        st.blue("!!! BLUE INERTIA (DOWN) !!!\n\nADVICE: WATCH OUT! DROP!")
+        st.info("!!! BLUE INERTIA (DOWN) !!!\n\nADVICE: WATCH OUT! DROP!")
     else:
         st.write("STATUS: CRUISING SPEED\n\nADVICE: Wait for Inertia.")
 
