@@ -37,7 +37,6 @@ def load_data():
     df['Inertia_DOWN'] = df['Velocity'] <= -INERTIA_THRESHOLD
     df['Short_Signal'] = (df['T_Score'] >= T_SCORE_OVERHEAT) & (df['Velocity'].shift(1) > 300) & (df['Velocity'] < VELOCITY_FADE)
 
-    # シカゴ時間 (JST → UTC-5 想定: -14時間)
     df['CHI_DT'] = df['Datetime'] - timedelta(hours=14)
     df['CHI_Label'] = df['CHI_DT'].apply(lambda x: int(f"{x.hour}{x.minute // 10}"))
     return df
@@ -72,32 +71,40 @@ with c_b:
 
 # 2時間おきラベル（4プロットごと）
 tick_interval = 4
-tick_idx = df_plot.index[::tick_interval]
-tick_lab = df_plot['CHI_Label'].values[::tick_interval]
+tick_positions = list(range(0, len(df_plot), tick_interval))
+tick_labels = [df_plot['CHI_Label'].iloc[i] for i in tick_positions]
 
 # Chart 1
 st.subheader("1. Long position: Inertia & Deviation Grid")
 fig1, (ax1_1, ax1_2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
-ax1_1.plot(df_plot.index, df_plot['Close'], color='black', linewidth=2)
-ax1_1.plot(df_plot.index, df_plot['MA25'], color='orange', linestyle='--', alpha=0.7)
+x_vals = np.arange(len(df_plot))
+
+ax1_1.plot(x_vals, df_plot['Close'], color='black', linewidth=2)
+ax1_1.plot(x_vals, df_plot['MA25'], color='orange', linestyle='--', alpha=0.7)
 ax1_1.scatter(df_plot[df_plot['Inertia_UP']].index, df_plot[df_plot['Inertia_UP']]['Close'], color='red', s=100)
 ax1_1.scatter(df_plot[df_plot['Inertia_DOWN']].index, df_plot[df_plot['Inertia_DOWN']]['Close'], color='blue', s=100)
 
-ax1_2.plot(df_plot.index, df_plot['T_Score'], color='darkviolet')
+ax1_2.plot(x_vals, df_plot['T_Score'], color='darkviolet')
 ax1_2.axhline(70, color='red', alpha=0.5)
 ax1_2.axhline(30, color='green', alpha=0.5)
-ax1_2.set_xticks(tick_idx)
-ax1_2.set_xticklabels(tick_lab, fontsize=8)
+
+# 軸設定（修正箇所）
+ax1_2.set_xlim(0, len(df_plot)-1)
+ax1_2.set_xticks(tick_positions)
+ax1_2.set_xticklabels(tick_labels, fontsize=8)
 ax1_2.grid(True, axis='x', alpha=0.2)
 st.pyplot(fig1)
 
 # Chart 2
 st.subheader("2. Short position: Gravity Sniper Scope")
 fig2, ax2 = plt.subplots(figsize=(10, 5))
-ax2.plot(df_plot.index, df_plot['T_Score'], color='darkviolet', linewidth=2)
+ax2.plot(x_vals, df_plot['T_Score'], color='darkviolet', linewidth=2)
 ax2.axhline(y=T_SCORE_OVERHEAT, color='crimson', linestyle='--')
 ax2.scatter(df_plot[df_plot['Short_Signal']].index, df_plot[df_plot['Short_Signal']]['T_Score'], color='blue', s=200, marker='v')
-ax2.set_xticks(tick_idx)
-ax2.set_xticklabels(tick_lab, fontsize=8)
+
+# 軸設定（修正箇所）
+ax2.set_xlim(0, len(df_plot)-1)
+ax2.set_xticks(tick_positions)
+ax2.set_xticklabels(tick_labels, fontsize=8)
 ax2.grid(True, axis='x', alpha=0.2)
 st.pyplot(fig2)
