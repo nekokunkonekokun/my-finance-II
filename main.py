@@ -69,15 +69,14 @@ with c_b:
     else:
         st.write("STATUS: STAY CALM")
 
-# 2時間おきラベル（4プロットごと）
 tick_interval = 4
 tick_positions = list(range(0, len(df_plot), tick_interval))
-tick_labels = [df_plot['CHI_Label'].iloc[i] for i in tick_positions]
+tick_labels = [str(df_plot['CHI_Label'].iloc[i]) for i in tick_positions]
+x_vals = np.arange(len(df_plot))
 
 # Chart 1
 st.subheader("1. Long position: Inertia & Deviation Grid")
 fig1, (ax1_1, ax1_2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True, gridspec_kw={'height_ratios': [2, 1]})
-x_vals = np.arange(len(df_plot))
 
 ax1_1.plot(x_vals, df_plot['Close'], color='black', linewidth=2)
 ax1_1.plot(x_vals, df_plot['MA25'], color='orange', linestyle='--', alpha=0.7)
@@ -88,11 +87,12 @@ ax1_2.plot(x_vals, df_plot['T_Score'], color='darkviolet')
 ax1_2.axhline(70, color='red', alpha=0.5)
 ax1_2.axhline(30, color='green', alpha=0.5)
 
-# 軸設定（修正箇所）
-ax1_2.set_xlim(0, len(df_plot)-1)
 ax1_2.set_xticks(tick_positions)
 ax1_2.set_xticklabels(tick_labels, fontsize=8)
 ax1_2.grid(True, axis='x', alpha=0.2)
+
+# 強制描画更新
+plt.draw()
 st.pyplot(fig1)
 
 # Chart 2
@@ -102,9 +102,9 @@ ax2.plot(x_vals, df_plot['T_Score'], color='darkviolet', linewidth=2)
 ax2.axhline(y=T_SCORE_OVERHEAT, color='crimson', linestyle='--')
 ax2.scatter(df_plot[df_plot['Short_Signal']].index, df_plot[df_plot['Short_Signal']]['T_Score'], color='blue', s=200, marker='v')
 
-# 軸設定（修正箇所）
-ax2.set_xlim(0, len(df_plot)-1)
 ax2.set_xticks(tick_positions)
 ax2.set_xticklabels(tick_labels, fontsize=8)
 ax2.grid(True, axis='x', alpha=0.2)
+
+plt.draw()
 st.pyplot(fig2)
