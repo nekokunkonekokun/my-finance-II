@@ -5,10 +5,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 from datetime import timedelta
 
-# ページ設定
 st.set_page_config(page_title="Dual Logic Mission Control", layout="wide")
 
-# --- Configuration ---
 ticker_sym = "NIY=F"
 interval = "30m"
 period = "1mo"
@@ -21,7 +19,6 @@ VELOCITY_FADE = 100
 
 st.title("🚀 Market Mission Control")
 
-# 1. データ取得と加工
 @st.cache_data(ttl=600)
 def load_data():
     data = yf.download(ticker_sym, period=period, interval=interval, auto_adjust=True)
@@ -29,7 +26,6 @@ def load_data():
         data.columns = data.columns.get_level_values(0)
     df = data.copy().dropna(subset=['Close']).reset_index()
 
-    # 指標計算
     df['MA25'] = df['Close'].rolling(window=ma_window).mean()
     df['Bias'] = (df['Close'] - df['MA25']) / df['MA25'] * 100
     df['Bias_Mean'] = df['Bias'].rolling(window=std_window).mean()
@@ -37,31 +33,26 @@ def load_data():
     df['T_Score'] = ((df['Bias'] - df['Bias_Mean']) / df['Bias_Std']) * 10 + 50
     df['Velocity'] = df['Close'].diff()
 
-    # シグナル判定
     df['Inertia_UP'] = df['Velocity'] >= INERTIA_THRESHOLD
     df['Inertia_DOWN'] = df['Velocity'] <= -INERTIA_THRESHOLD
     df['Short_Signal'] = (df['T_Score'] >= T_SCORE_OVERHEAT) & (df['Velocity'].shift(1) > 300) & (df['Velocity'] < VELOCITY_FADE)
-    
-    # シカゴ時間計算 (JSTから-14時間) とラベル化 (19:30 -> 193)
+
+    # シカゴ時間 (JST → UTC-5 想定: -14時間)
     df['CHI_DT'] = df['Datetime'] - timedelta(hours=14)
     df['CHI_Label'] = df['CHI_DT'].apply(lambda x: int(f"{x.hour}{x.minute // 10}"))
-    
     return df
 
 df = load_data()
 last_time = df['Datetime'].max()
-# 直近2日間を抽出（indexを振り直すことで土日の空白を詰める）
 df_plot = df[df['Datetime'] >= (last_time - timedelta(days=2))].copy().reset_index(drop=True)
 latest = df_plot.iloc[-1]
 
-# --- 2. 統合ミッションパネル ---
 st.subheader("Mission Control Panel")
 col1, col2, col3 = st.columns(3)
 col1.metric("PRICE", f"¥{latest['Close']:,.0f}", f"{latest['Velocity']:+.0f}")
 col2.metric("T-SCORE", f"{latest['T_Score']:.1f}")
 col3.write(f"**Update(CHI):** {latest['CHI_DT'].strftime('%Y/%m/%d %H:%M')}")
 
-# ロジック判定表示
 c_a, c_b = st.columns(2)
 with c_a:
     st.info("**LOGIC-A: BULLISH INERTIA**")
@@ -79,8 +70,7 @@ with c_b:
     else:
         st.write("STATUS: STAY CALM")
 
-# --- 3. 視覚化セクション ---
-# 目盛り設定: 2時間おき(4プロットごと)
+# 2時間おきラベル（4プロットごと）
 tick_interval = 4
 tick_idx = df_plot.index[::tick_interval]
 tick_lab = df_plot['CHI_Label'].values[::tick_interval]
