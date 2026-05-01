@@ -20,7 +20,7 @@ T_SCORE_BULL_RECOVERY = 60
 T_SCORE_LONG_ENTRY = 30    
 T_SCORE_CRITICAL_BUY = 25  
 
-st.title("🚀 Market Mission Control [Bull Absolute 120]")
+st.title("🚀 Market Mission Control [Long logic Don't do Short]")
 
 @st.cache_data(ttl=60)
 def load_data():
