@@ -6,49 +6,39 @@ import matplotlib.pyplot as plt
 from datetime import timedelta
 import pytz
 
-st.set_page_config(page_title="Short-Term Mission Control", layout="wide")
+st.set_page_config(page_title="Mission Control [15m]", layout="wide")
 
 # --- パラメータ設定 ---
 ticker_sym = "NIY=F"
 interval = "15m"
-period = "7d"  # 10分足の取得を安定させるため7日に短縮
+period = "7d"
 ma_window = 25
-std_window = 160
+std_window = 120  # 15分足に合わせた感度設定
 
 # 戦略閾値
-INERTIA_THRESHOLD = 180   # 噴射判定
-VELOCITY_FADE = 40        # 失速判定
-T_SCORE_OVERHEAT = 90     # ショート基準
-T_SCORE_BEAR = 30         # ロング基準
-T_SCORE_CRITICAL = 25     # 警戒ライン
+INERTIA_THRESHOLD = 180
+VELOCITY_FADE = 40
+T_SCORE_OVERHEAT = 90
+T_SCORE_BEAR = 30
+T_SCORE_CRITICAL = 25
 
-st.title("🚀 Market Mission Control [10m Mode]")
+st.title("🚀 Market Mission Control [15m Mode]")
 
 @st.cache_data(ttl=60)
 def load_data():
-    # 取得期間を7日にすることで、10分足の取得エラーを回避
     data = yf.download(ticker_sym, period=period, interval=interval, auto_adjust=True)
-    
     if data.empty:
         return pd.DataFrame()
-        
     if isinstance(data.columns, pd.MultiIndex):
         data.columns = data.columns.get_level_values(0)
     
-    # 欠損値を除外
     df = data.copy().dropna(subset=['Close'])
     
-    # タイムゾーン変換（JST/CST）
-    try:
-        df['JST'] = df.index.tz_convert('Asia/Tokyo')
-        df['CST'] = df.index.tz_convert('America/Chicago')
-    except:
-        # 万が一Indexにタイムゾーンがない場合の処理
-        df.index = df.index.tz_localize('UTC')
-        df['JST'] = df.index.tz_convert('Asia/Tokyo')
-        df['CST'] = df.index.tz_convert('America/Chicago')
-    
-    df = df.reset_index()
+    # タイムゾーン変換
+    df.index = df.index.tz_convert('Asia/Tokyo')
+    df['JST'] = df.index
+    df['CST'] = df.index.tz_convert('America/Chicago')
+    df = df.reset_index(drop=True)
 
     # 指標計算
     df['MA25'] = df['Close'].rolling(window=ma_window).mean()
@@ -60,17 +50,14 @@ def load_data():
 
     # シグナル
     df['Inertia_UP'] = df['Velocity'] >= INERTIA_THRESHOLD
-    df['Short_Signal'] = (df['T_Score'] >= T_SCORE_OVERHEAT) & (df['Velocity'].shift(1) > 150) & (df['Velocity'] < VELOCITY_FADE)
-    
     df['CHI_Label'] = df['CST'].dt.strftime('%H:%M')
     return df
 
 df = load_data()
 
-# --- 表示ロジック ---
 if not df.empty:
-    # 最新から96件（約16時間分）を確実に抽出
-    df_plot = df.tail(96).copy().reset_index(drop=True)
+    # 15分足で16時間分（64件）をスライス
+    df_plot = df.tail(64).copy().reset_index(drop=True)
     
     if len(df_plot) > 0:
         latest = df_plot.iloc[-1]
@@ -89,7 +76,8 @@ if not df.empty:
         # チャート描画
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [2, 1]})
 
-        tick_interval = 6
+        # 1時間(4件)おきに目盛り
+        tick_interval = 4
         tick_positions = np.arange(0, len(df_plot), tick_interval)
         tick_labels = [df_plot['CHI_Label'].iloc[i] for i in tick_positions]
 
@@ -109,9 +97,5 @@ if not df.empty:
         ax2.grid(axis='x', alpha=0.2)
 
         st.pyplot(fig)
-    else:
-        st.warning("表示期間内のデータがありません。")
 else:
-    st.error("yfinanceからデータを取得できません。10分足の提供が一時的に止まっている可能性があります。")
-
-
+    st.error("データ取得エラー。15分足設定を確認してください。")
