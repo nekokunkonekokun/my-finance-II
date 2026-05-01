@@ -12,8 +12,8 @@ st.set_page_config(page_title="Mission Control [15m]", layout="wide")
 ticker_sym = "NIY=F"
 interval = "15m"
 period = "7d"
-ma_window = 14
-std_window = 40   # 15分足に合わせた感度設定
+ma_window = 25
+std_window = 120    # 15分足に合わせた感度設定
 
 # 戦略閾値
 INERTIA_THRESHOLD = 180
