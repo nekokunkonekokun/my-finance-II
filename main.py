@@ -12,7 +12,7 @@ interval = "15m"
 period = "7d"
 lookback = 120  # 30時間の結界（ここでの高値を絶対基準にする）
 
-st.title("🚀 Market Mission Control [Pure Bull Mode]")
+st.title("🚀 Market Mission Control [Long logic Mode Don't do short!]")
 
 @st.cache_data(ttl=60)
 def load_data():
