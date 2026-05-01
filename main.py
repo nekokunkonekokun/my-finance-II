@@ -10,7 +10,7 @@ st.set_page_config(page_title="Short-Term Mission Control", layout="wide")
 
 # --- パラメータ設定 ---
 ticker_sym = "NIY=F"
-interval = "10m"
+interval = "15m"
 period = "7d"  # 10分足の取得を安定させるため7日に短縮
 ma_window = 25
 std_window = 160
