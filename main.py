@@ -52,7 +52,7 @@ def load_data():
     df['Velocity'] = df['Close'].diff()
     # 直近3本（45分）の平均速度を偏差値スケールに変換
     # 0.5の係数は、位置と速度のバランス調整用です
-    df['Accel_Factor'] = (df['Velocity'].rolling(window=3).mean() / (df['Close'] * 0.001)) * 5
+    df['Accel_Factor'] = (df['Velocity'].rolling(window=5).mean() / (df['Close'] * 0.001)) * 3
     df['T_Score'] = df['T_Score_Pos'] + df['Accel_Factor']
 
     # シグナル
@@ -63,8 +63,8 @@ def load_data():
 df = load_data()
 
 if not df.empty:
-    df_plot = df.tail(64).copy().reset_index(drop=True)
-    
+    df_plot = df.tail(64).copy().reset_index(drop=True)5
+    55
     if len(df_plot) > 0:
         latest = df_plot.iloc[-1]
 
