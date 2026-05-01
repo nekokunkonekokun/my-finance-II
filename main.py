@@ -11,35 +11,42 @@ st.set_page_config(page_title="Short-Term Mission Control", layout="wide")
 # --- パラメータ設定 ---
 ticker_sym = "NIY=F"
 interval = "10m"
-period = "1mo"
+period = "7d"  # 10分足の取得を安定させるため7日に短縮
 ma_window = 25
 std_window = 160
 
 # 戦略閾値
 INERTIA_THRESHOLD = 180   # 噴射判定
-VELOCITY_FADE = 40        # 失速判定（利確・撤退目安）
-T_SCORE_OVERHEAT = 90     # 超過熱（ショート）
-T_SCORE_BEAR = 30         # 狙い目（ロング）
-T_SCORE_CRITICAL = 25     # 警戒（二段目）
+VELOCITY_FADE = 40        # 失速判定
+T_SCORE_OVERHEAT = 90     # ショート基準
+T_SCORE_BEAR = 30         # ロング基準
+T_SCORE_CRITICAL = 25     # 警戒ライン
 
 st.title("🚀 Market Mission Control [10m Mode]")
 
-@st.cache_data(ttl=60) # 1分更新でリアルタイム性を確保
+@st.cache_data(ttl=60)
 def load_data():
-    # データ取得
+    # 取得期間を7日にすることで、10分足の取得エラーを回避
     data = yf.download(ticker_sym, period=period, interval=interval, auto_adjust=True)
+    
     if data.empty:
         return pd.DataFrame()
         
     if isinstance(data.columns, pd.MultiIndex):
         data.columns = data.columns.get_level_values(0)
     
-    # 欠損値を完全に除外して最新状態を確定
+    # 欠損値を除外
     df = data.copy().dropna(subset=['Close'])
     
-    # タイムゾーン変換
-    df['JST'] = df.index.tz_convert('Asia/Tokyo')
-    df['CST'] = df.index.tz_convert('America/Chicago')
+    # タイムゾーン変換（JST/CST）
+    try:
+        df['JST'] = df.index.tz_convert('Asia/Tokyo')
+        df['CST'] = df.index.tz_convert('America/Chicago')
+    except:
+        # 万が一Indexにタイムゾーンがない場合の処理
+        df.index = df.index.tz_localize('UTC')
+        df['JST'] = df.index.tz_convert('Asia/Tokyo')
+        df['CST'] = df.index.tz_convert('America/Chicago')
     
     df = df.reset_index()
 
@@ -53,24 +60,22 @@ def load_data():
 
     # シグナル
     df['Inertia_UP'] = df['Velocity'] >= INERTIA_THRESHOLD
-    # ショート条件: 前足の勢いが150以上かつ今足でFADE(40)未満に減速
     df['Short_Signal'] = (df['T_Score'] >= T_SCORE_OVERHEAT) & (df['Velocity'].shift(1) > 150) & (df['Velocity'] < VELOCITY_FADE)
     
-    # チャート用ラベル (シカゴ時間)
     df['CHI_Label'] = df['CST'].dt.strftime('%H:%M')
     return df
 
 df = load_data()
 
-# --- エラー回避と表示ロジック ---
+# --- 表示ロジック ---
 if not df.empty:
-    # 最新から96件（約16時間分）を取得
+    # 最新から96件（約16時間分）を確実に抽出
     df_plot = df.tail(96).copy().reset_index(drop=True)
     
-    if not df_plot.empty:
+    if len(df_plot) > 0:
         latest = df_plot.iloc[-1]
 
-        # --- パネル表示 ---
+        # パネル表示
         st.subheader("Mission Status")
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -81,22 +86,19 @@ if not df.empty:
             st.write(f"**JST:** {latest['JST'].strftime('%m/%d %H:%M')}")
             st.write(f"**CST:** {latest['CST'].strftime('%m/%d %H:%M')}")
 
-        # --- Chart ---
+        # チャート描画
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [2, 1]})
 
-        # 目盛り設定（1時間おき=6プロット間隔）
         tick_interval = 6
         tick_positions = np.arange(0, len(df_plot), tick_interval)
         tick_labels = [df_plot['CHI_Label'].iloc[i] for i in tick_positions]
 
-        # 上段：価格と慣性
         ax1.plot(df_plot.index, df_plot['Close'], color='black', linewidth=1.5)
         ax1.scatter(df_plot[df_plot['Inertia_UP']].index, df_plot[df_plot['Inertia_UP']]['Close'], color='red', s=60)
         ax1.set_xticks(tick_positions)
         ax1.set_xticklabels([])
         ax1.grid(alpha=0.2)
 
-        # 下段：T-Score二段構え
         ax2.plot(df_plot.index, df_plot['T_Score'], color='darkviolet', linewidth=1)
         ax2.axhline(T_SCORE_OVERHEAT, color='crimson', linestyle='--', alpha=0.6, label="Short (90)")
         ax2.axhline(T_SCORE_BEAR, color='orange', linestyle='--', alpha=0.6, label="Long (30)")
@@ -108,9 +110,8 @@ if not df.empty:
 
         st.pyplot(fig)
     else:
-        st.warning("表示可能なデータが不足しています。")
+        st.warning("表示期間内のデータがありません。")
 else:
-    st.error("データが取得できません。チッカーシンボルや接続を確認してください。")
+    st.error("yfinanceからデータを取得できません。10分足の提供が一時的に止まっている可能性があります。")
 
-# デメリット: 市場終了直後などはデータが配信されない時間帯があります。
-# ハルシネーションを疑え
+
