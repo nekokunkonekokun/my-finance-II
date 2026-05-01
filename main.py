@@ -13,7 +13,7 @@ ticker_sym = "NIY=F"
 interval = "15m"
 period = "7d"
 ma_window = 25
-std_window = 120  # 15分足に合わせた感度設定
+std_window = 80   # 15分足に合わせた感度設定
 
 # 戦略閾値
 INERTIA_THRESHOLD = 180
