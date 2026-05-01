@@ -4,27 +4,41 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import timedelta
+import pytz
 
-st.set_page_config(page_title="Dual Logic Mission Control", layout="wide")
+st.set_page_config(page_title="Dual Time Mission Control", layout="wide")
 
+# パラメータ設定
 ticker_sym = "NIY=F"
-interval = "30m"
+interval = "10m"
 period = "1mo"
 ma_window = 25
 std_window = 160
 
-INERTIA_THRESHOLD = 500
-T_SCORE_OVERHEAT = 75
-VELOCITY_FADE = 100
+# 戦略閾値
+INERTIA_THRESHOLD = 180
+VELOCITY_FADE = 40
+T_SCORE_OVERHEAT = 90
+T_SCORE_BEAR = 30
+T_SCORE_CRITICAL = 25
 
-st.title("🚀 Market Mission Control")
+st.title("🚀 Market Mission Control [10m Mode]")
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=300)
 def load_data():
     data = yf.download(ticker_sym, period=period, interval=interval, auto_adjust=True)
     if isinstance(data.columns, pd.MultiIndex):
         data.columns = data.columns.get_level_values(0)
-    df = data.copy().dropna(subset=['Close']).reset_index()
+    
+    df = data.copy().dropna(subset=['Close'])
+    
+    # --- タイムゾーン変換 ---
+    # yfinanceのIndex(Datetime)を日本時間とシカゴ時間に変換
+    df['JST'] = df.index.tz_convert('Asia/Tokyo')
+    df['CST'] = df.index.tz_convert('America/Chicago')
+    
+    # 計算用に一度Indexをリセット
+    df = df.reset_index()
 
     # 指標計算
     df['MA25'] = df['Close'].rolling(window=ma_window).mean()
@@ -36,61 +50,50 @@ def load_data():
 
     # シグナル
     df['Inertia_UP'] = df['Velocity'] >= INERTIA_THRESHOLD
-    df['Inertia_DOWN'] = df['Velocity'] <= -INERTIA_THRESHOLD
-    df['Short_Signal'] = (df['T_Score'] >= T_SCORE_OVERHEAT) & (df['Velocity'].shift(1) > 300) & (df['Velocity'] < VELOCITY_FADE)
-
-    # シカゴ時間ラベル作成
-    df['CHI_DT'] = df['Datetime'] - timedelta(hours=14)
-    df['CHI_Label'] = df['CHI_DT'].apply(lambda x: f"{x.hour}{x.minute // 10}")
+    df['Short_Signal'] = (df['T_Score'] >= T_SCORE_OVERHEAT) & (df['Velocity'].shift(1) > 150) & (df['Velocity'] < VELOCITY_FADE)
+    
+    # チャート用ラベル (シカゴ時間)
+    df['CHI_Label'] = df['CST'].dt.strftime('%H:%M')
     return df
 
 df = load_data()
-last_time = df['Datetime'].max()
-df_plot = df[df['Datetime'] >= (last_time - timedelta(days=2))].copy().reset_index(drop=True)
+last_time = df['JST'].max()
+df_plot = df[df['JST'] >= (last_time - timedelta(hours=16))].copy().reset_index(drop=True)
 latest = df_plot.iloc[-1]
 
-# 目盛り設定（2時間おき=4プロット）
-tick_interval = 4
+# 目盛り設定
+tick_interval = 6
 tick_positions = np.arange(0, len(df_plot), tick_interval)
 tick_labels = [df_plot['CHI_Label'].iloc[i] for i in tick_positions]
 
 # --- パネル表示 ---
-st.subheader("Mission Control Panel")
+st.subheader("Mission Status")
 col1, col2, col3 = st.columns(3)
-col1.metric("PRICE", f"¥{latest['Close']:,.0f}", f"{latest['Velocity']:+.0f}")
-col2.metric("T-SCORE", f"{latest['T_Score']:.1f}")
-col3.write(f"**Update(CHI):** {latest['CHI_DT'].strftime('%Y/%m/%d %H:%M')}")
+with col1:
+    st.metric("PRICE", f"¥{latest['Close']:,.0f}", f"{latest['Velocity']:+.0f}")
+with col2:
+    st.metric("T-SCORE", f"{latest['T_Score']:.1f}")
+with col3:
+    st.write(f"**JST:** {latest['JST'].strftime('%m/%d %H:%M')}")
+    st.write(f"**CHI:** {latest['CST'].strftime('%m/%d %H:%M')}")
 
-# --- Chart 1 ---
-st.subheader("1. Long position: Inertia & Deviation Grid")
-# sharex=Trueを解除し、個別に制御
-fig1, (ax1_1, ax1_2) = plt.subplots(2, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [2, 1]})
+# --- Chart ---
+fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), gridspec_kw={'height_ratios': [2, 1]})
 
-ax1_1.plot(df_plot.index, df_plot['Close'], color='black', linewidth=2)
-ax1_1.plot(df_plot.index, df_plot['MA25'], color='orange', linestyle='--', alpha=0.7)
-ax1_1.scatter(df_plot[df_plot['Inertia_UP']].index, df_plot[df_plot['Inertia_UP']]['Close'], color='red', s=100)
-ax1_1.scatter(df_plot[df_plot['Inertia_DOWN']].index, df_plot[df_plot['Inertia_DOWN']]['Close'], color='blue', s=100)
-ax1_1.set_xticks(tick_positions)
-ax1_1.set_xticklabels([]) # 上段はラベルを隠す
+# 上段：価格
+ax1.plot(df_plot.index, df_plot['Close'], color='black', linewidth=1.5)
+ax1.scatter(df_plot[df_plot['Inertia_UP']].index, df_plot[df_plot['Inertia_UP']]['Close'], color='red', s=60)
+ax1.set_xticks(tick_positions)
+ax1.set_xticklabels([])
+ax1.grid(alpha=0.2)
 
-ax1_2.plot(df_plot.index, df_plot['T_Score'], color='darkviolet')
-ax1_2.axhline(70, color='red', alpha=0.5)
-ax1_2.axhline(30, color='green', alpha=0.5)
-ax1_2.set_xticks(tick_positions)
-ax1_2.set_xticklabels(tick_labels, fontsize=8) # 文字列ラベルを強制
-ax1_2.grid(True, axis='x', alpha=0.2)
-
-st.pyplot(fig1)
-
-# --- Chart 2 ---
-st.subheader("2. Short position: Gravity Sniper Scope")
-fig2, ax2 = plt.subplots(figsize=(10, 5))
-ax2.plot(df_plot.index, df_plot['T_Score'], color='darkviolet', linewidth=2)
-ax2.axhline(y=T_SCORE_OVERHEAT, color='crimson', linestyle='--')
-ax2.scatter(df_plot[df_plot['Short_Signal']].index, df_plot[df_plot['Short_Signal']]['T_Score'], color='blue', s=200, marker='v')
-
+# 下段：T-Score
+ax2.plot(df_plot.index, df_plot['T_Score'], color='darkviolet', linewidth=1)
+ax2.axhline(T_SCORE_OVERHEAT, color='crimson', linestyle='--', alpha=0.6)
+ax2.axhline(T_SCORE_BEAR, color='orange', linestyle='--', alpha=0.6)
+ax2.axhline(T_SCORE_CRITICAL, color='red', linestyle=':', alpha=0.8)
 ax2.set_xticks(tick_positions)
-ax2.set_xticklabels(tick_labels, fontsize=8) # 文字列ラベルを強制
-ax2.grid(True, axis='x', alpha=0.2)
+ax2.set_xticklabels(tick_labels, rotation=45, fontsize=8)
+ax2.grid(axis='x', alpha=0.2)
 
-st.pyplot(fig2)
+st.pyplot(fig)
